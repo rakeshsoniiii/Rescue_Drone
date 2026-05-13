@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warehouse Bot CAM</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0b0e13;
+    --surface:  #131720;
+    --surface2: #1c2230;
+    --border:   #2a3245;
+    --accent:   #00e5ff;
+    --text:     #e8edf5;
+    --muted:    #5a6a85;
+    --success:  #00e676;
+    --danger:   #ff3d57;
+    --flash-on: #ffd740;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.4rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .logo-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.4; transform:scale(1.5); }
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'Space Mono', monospace;
+    font-size: .7rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    transition: color .3s;
+  }
+
+  .status-pill .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: background .3s;
+  }
+
+  .status-pill.connected .dot { background: var(--success); }
+  .status-pill.connected      { color: var(--text); }
+
+  .ip-bar {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    gap: 10px;
+    padding: 1rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ip-hint {
+    width: 100%;
+    max-width: 960px;
+    padding: .55rem 2rem;
+    font-family: 'Space Mono', monospace;
+    font-size: .65rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ip-hint span { color: var(--accent); }
+
+  .ip-bar input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: .85rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .2s;
+  }
+
+  .ip-bar input:focus { border-color: var(--accent); }
+  .ip-bar input::placeholder { color: var(--muted); }
+
+  .btn-connect {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: .85rem;
+    padding: 10px 22px;
+    cursor: pointer;
+    letter-spacing: .04em;
+    transition: opacity .2s, transform .1s;
+  }
+
+  .btn-connect:hover  { opacity: .85; }
+  .btn-connect:active { transform: scale(.97); }
+
+  main {
+    width: 100%;
+    max-width: 960px;
+    padding: 1.5rem 2rem 3rem;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 1.5rem;
+  }
+
+  .stream-panel { display: flex; flex-direction: column; gap: 1rem; }
+
+  .stream-box {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #streamImg {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: none;
+  }
+
+  .stream-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: .85rem;
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .stream-placeholder svg { opacity: .3; }
+
+  .live-badge {
+    position: absolute;
+    top: 12px; left: 12px;
+    background: rgba(0,0,0,.65);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: .62rem;
+    color: var(--accent);
+    letter-spacing: .05em;
+    display: none;
+  }
+
+  .capture-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    color: white;
+    font-family: 'Space Mono', monospace;
+    font-size: .8rem;
+    letter-spacing: .08em;
+  }
+
+  .capture-overlay.active { display: flex; }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid rgba(255,255,255,.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .shutter-ring {
+    position: absolute; inset: 0;
+    border: 3px solid transparent;
+    border-radius: 14px;
+    pointer-events: none;
+  }
+
+  @keyframes shutter {
+    0%   { border-color: white; opacity: 1; }
+    100% { border-color: transparent; opacity: 0; }
+  }
+
+  .shutter-ring.go { animation: shutter .4s ease-out forwards; }
+
+  .controls { display: flex; flex-direction: column; gap: 1rem; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem;
+  }
+
+  .card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: .63rem;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: .9rem;
+  }
+
+  .btn-capture {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: .05em;
+    padding: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: opacity .15s, transform .1s;
+  }
+
+  .btn-capture:hover  { opacity: .85; box-shadow: 0 0 24px rgba(0,229,255,.3); }
+  .btn-capture:active { transform: scale(.97); }
+  .btn-capture:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+  .btn-flash {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: .9rem;
+    padding: 13px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: border-color .2s, background .2s;
+  }
+
+  .btn-flash:hover { border-color: var(--flash-on); background: rgba(255,215,64,.04); }
+
+  .btn-flash.on {
+    border-color: var(--flash-on);
+    background: rgba(255,215,64,.07);
+    color: var(--flash-on);
+  }
+
+  .flash-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background .2s, box-shadow .2s;
+  }
+
+  .btn-flash.on .flash-dot {
+    background: var(--flash-on);
+    box-shadow: 0 0 10px var(--flash-on);
+  }
+
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .stat {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .9rem 1rem;
+  }
+
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: .6rem;
+    letter-spacing: .1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .stat-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .debug-box {
+    background: #050709;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: .8rem;
+    font-family: 'Space Mono', monospace;
+    font-size: .64rem;
+    max-height: 190px;
+    overflow-y: auto;
+  }
+
+  .debug-box::-webkit-scrollbar { width: 3px; }
+  .debug-box::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-line { line-height: 1.85; }
+  .log-line.ok   { color: var(--success); }
+  .log-line.err  { color: var(--danger); }
+  .log-line.info { color: #4a90c4; }
+  .log-line.warn { color: var(--flash-on); }
+
+  .toast {
+    position: fixed;
+    bottom: 2rem; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 10px 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: .78rem;
+    color: var(--text);
+    transition: transform .3s cubic-bezier(.34,1.56,.64,1), opacity .3s;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.ok   { border-color: var(--success); color: var(--success); }
+  .toast.err  { border-color: var(--danger);  color: var(--danger); }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; }
+    header, .ip-bar, .ip-hint, main { padding-left: 1rem; padding-right: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>Warehouse Bot CAM</div>
+  <div class="status-pill" id="statusPill">
+    <div class="dot"></div>
+    <span id="statusText">Not connected</span>
+  </div>
+</header>
+
+<!-- WiFi hint -->
+<div class="ip-hint">
+  &#9432; Connect your device to WiFi &nbsp;<span>Warehouse Bot</span>&nbsp; (password: <span>123123DD</span>), then enter the IP shown in Serial Monitor below.
+</div>
+
+<div class="ip-bar">
+  <input type="text" id="ipInput" placeholder="ESP32 IP — e.g. 192.168.4.1" />
+  <button class="btn-connect" onclick="connect()">Connect</button>
+</div>
+
+<main>
+  <div class="stream-panel">
+    <div class="stream-box">
+
+      <div class="stream-placeholder" id="placeholder">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.2">
+          <path d="M23 7l-7 5 7 5V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <span>Connect to <b>Warehouse Bot</b> WiFi,<br>then enter IP and press Connect</span>
+      </div>
+
+      <img id="streamImg" alt="Live stream" />
+
+      <div class="live-badge" id="liveBadge">&#9679; LIVE</div>
+
+      <div class="capture-overlay" id="captureOverlay">
+        <div class="spinner"></div>
+        <span>CAPTURING…</span>
+      </div>
+
+      <div class="shutter-ring" id="shutterRing"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+
+    <div class="card">
+      <div class="card-label">Camera</div>
+      <button class="btn-capture" id="btnCapture" onclick="capturePhoto()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="3.5"/>
+          <path d="M20 5h-2.586l-1.707-1.707A1 1 0 0015 3H9a1
+            1 0 00-.707.293L6.586 5H4a2 2 0 00-2 2v12a2 2 0
+            002 2h16a2 2 0 002-2V7a2 2 0 00-2-2z"/>
+        </svg>
+        CAPTURE
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Flash LED</div>
+      <button class="btn-flash" id="btnFlash" onclick="toggleFlash()">
+        <span id="flashLabel">&#9889; Flash &nbsp; OFF</span>
+        <div class="flash-dot"></div>
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-label">Stats</div>
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-label">Photos</div>
+          <div class="stat-val" id="statPhotos">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Flash</div>
+          <div class="stat-val" id="statFlash"
+               style="font-size:.85rem;color:var(--muted)">OFF</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="card-label">Debug Log</div>
+      <div class="debug-box" id="debugBox">
+        <div class="log-line info">[ ready ] Connect to Warehouse Bot WiFi</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var espIP      = '';
+var flashOn    = false;
+var photoCount = 0;
+var connected  = false;
+
+// ── CONNECT ──────────────────────────────────────────────────────────
+function connect() {
+  var raw = document.getElementById('ipInput').value.trim();
+  if (!raw) { showToast('Enter an IP address', 'err'); return; }
+  if (raw.indexOf('http') !== 0) raw = 'http://' + raw;
+  espIP = raw.replace(/\/$/, '');
+
+  log('Connecting → ' + espIP, 'info');
+
+  xhrGet(espIP + '/status', 5000, function(ok, text) {
+    if (ok) {
+      try {
+        var d  = JSON.parse(text);
+        photoCount = parseInt(d.imageCount) || 0;
+        flashOn    = (d.flash === true || d.flash === 'true');
+        document.getElementById('statPhotos').textContent = photoCount;
+        updateFlashUI();
+        log('Status OK — photos on SD: ' + photoCount, 'ok');
+      } catch(e) {
+        log('Status parse warn: ' + e.message, 'warn');
+      }
+      connected = true;
+      setConnected(true);
+      startStream();
+      showToast('Connected!', 'ok');
+    } else {
+      log('Cannot reach ESP32. Same WiFi? Correct IP?', 'err');
+      showToast('Connection failed', 'err');
+    }
+  });
+}
+
+// ── STREAM  (port 81) ────────────────────────────────────────────────
+function streamBase() {
+  // swap http:// port for :81
+  return espIP.replace(/^http:\/\//, 'http://').replace(/(:\d+)?$/, ':81');
+}
+
+function startStream() {
+  var img = document.getElementById('streamImg');
+  img.src = streamBase() + '/stream?t=' + Date.now();
+  img.style.display = 'block';
+  img.onerror = function() { log('Stream error — retrying in 3s', 'warn'); };
+
+  document.getElementById('placeholder').style.display = 'none';
+  var badge = document.getElementById('liveBadge');
+  badge.style.display = 'block';
+  badge.style.color   = '';
+  badge.textContent   = '\u25CF LIVE';
+
+  log('Stream started on :81', 'info');
+}
+
+// ── CAPTURE  (port 80 — never blocked by stream now) ─────────────────
+function capturePhoto() {
+  if (!connected) { showToast('Not connected', 'err'); return; }
+
+  var btn = document.getElementById('btnCapture');
+  btn.disabled = true;
+  document.getElementById('captureOverlay').classList.add('active');
+
+  log('Sending /capture…', 'info');
+
+  // No need to stop stream — firmware uses separate port + FreeRTOS task.
+  // Just call /capture directly.
+  xhrGet(espIP + '/capture', 12000, function(ok, text) {
+
+    btn.disabled = false;
+    document.getElementById('captureOverlay').classList.remove('active');
+
+    if (ok) {
+      var isSuccess = true;
+      var msg = 'Photo saved';
+
+      try {
+        var d = JSON.parse(text);
+        if (d.success === false) {
+          isSuccess = false;
+          log('ESP32 error: ' + d.msg, 'err');
+          showToast('Error: ' + d.msg, 'err');
+        } else {
+          msg = d.file ? 'Saved: ' + d.file : 'Photo saved';
+        }
+      } catch(e) {
+        msg = text ? text.trim() : 'Photo saved';
+      }
+
+      if (isSuccess) {
+        photoCount++;
+        document.getElementById('statPhotos').textContent = photoCount;
+        flashShutter();
+        log(msg, 'ok');
+        showToast('Photo saved \u2713', 'ok');
+      }
+    } else {
+      log('/capture failed — check Serial Monitor', 'err');
+      showToast('Capture failed', 'err');
+    }
+  });
+}
+
+// ── FLASH ────────────────────────────────────────────────────────────
+function toggleFlash() {
+  if (!connected) { showToast('Not connected', 'err'); return; }
+
+  xhrGet(espIP + '/flash', 5000, function(ok, text) {
+    if (ok) {
+      try {
+        var d  = JSON.parse(text);
+        flashOn = (d.flash === true || d.flash === 'true');
+      } catch(e) {
+        flashOn = !flashOn;
+      }
+      updateFlashUI();
+      log('Flash: ' + (flashOn ? 'ON' : 'OFF'), 'ok');
+      showToast('Flash ' + (flashOn ? 'ON' : 'OFF'), 'ok');
+    } else {
+      log('Flash toggle failed', 'err');
+      showToast('Flash error', 'err');
+    }
+  });
+}
+
+function updateFlashUI() {
+  var btn  = document.getElementById('btnFlash');
+  var lbl  = document.getElementById('flashLabel');
+  var stat = document.getElementById('statFlash');
+
+  if (flashOn) {
+    btn.classList.add('on');
+    lbl.innerHTML    = '&#9889; Flash &nbsp; ON';
+    stat.textContent = 'ON';
+    stat.style.color = 'var(--flash-on)';
+  } else {
+    btn.classList.remove('on');
+    lbl.innerHTML    = '&#9889; Flash &nbsp; OFF';
+    stat.textContent = 'OFF';
+    stat.style.color = 'var(--muted)';
+  }
+}
+
+// ── XHR HELPER ───────────────────────────────────────────────────────
+function xhrGet(url, timeout, cb) {
+  log('XHR \u2192 ' + url, 'info');
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.timeout = timeout;
+
+  xhr.onload = function() {
+    log('XHR \u2190 HTTP ' + xhr.status +
+        (xhr.responseText ? ' | ' + xhr.responseText.substring(0, 80) : ''), 'info');
+    cb(xhr.status >= 200 && xhr.status < 300, xhr.responseText);
+  };
+
+  xhr.onerror   = function() { log('XHR network error: ' + url, 'err'); cb(false, null); };
+  xhr.ontimeout = function() { log('XHR timeout: ' + url, 'err'); cb(false, null); };
+
+  try { xhr.send(); } catch(e) { log('XHR exception: ' + e, 'err'); cb(false, null); }
+}
+
+// ── UI HELPERS ───────────────────────────────────────────────────────
+function setConnected(ok) {
+  var pill = document.getElementById('statusPill');
+  var text = document.getElementById('statusText');
+  if (ok) {
+    pill.classList.add('connected');
+    text.textContent = 'Connected \u00B7 ' + espIP.replace('http://', '');
+  } else {
+    pill.classList.remove('connected');
+    text.textContent = 'Not connected';
+  }
+}
+
+function flashShutter() {
+  var ring = document.getElementById('shutterRing');
+  ring.classList.remove('go');
+  void ring.offsetWidth;
+  ring.classList.add('go');
+  setTimeout(function() { ring.classList.remove('go'); }, 450);
+}
+
+function log(msg, type) {
+  var box  = document.getElementById('debugBox');
+  var line = document.createElement('div');
+  var ts   = new Date().toLocaleTimeString();
+  line.className   = 'log-line ' + (type || 'info');
+  line.textContent = '[' + ts + '] ' + msg;
+  box.prepend(line);
+  while (box.children.length > 80) box.removeChild(box.lastChild);
+}
+
+var toastTimer;
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast show ' + (type || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+document.getElementById('ipInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') connect();
+});
+</script>
+</body>
+</html>
