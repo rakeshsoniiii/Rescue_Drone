@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warehouse Bot CAM</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0b0e13;--surface:#131720;--surface2:#1c2230;--border:#2a3245;
+    --accent:#00e5ff;--text:#e8edf5;--muted:#5a6a85;
+    --success:#00e676;--danger:#ff3d57;--flash-on:#ffd740;--gps:#a78bfa;--tg:#2aabee;
+  }
+  body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  header{width:100%;max-width:1100px;display:flex;align-items:center;justify-content:space-between;padding:1.4rem 2rem;border-bottom:1px solid var(--border)}
+  .logo{display:flex;align-items:center;gap:10px;font-size:1.1rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  .logo-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.5)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .status-pill{display:flex;align-items:center;gap:7px;font-family:'Space Mono',monospace;font-size:.7rem;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:6px 14px;transition:color .3s}
+  .status-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--danger);transition:background .3s}
+  .status-pill.connected .dot{background:var(--success)}
+  .status-pill.connected{color:var(--text)}
+  .ip-hint{width:100%;max-width:1100px;padding:.55rem 2rem;font-family:'Space Mono',monospace;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)}
+  .ip-hint span{color:var(--accent)}
+  .ip-bar{width:100%;max-width:1100px;display:flex;gap:10px;padding:1rem 2rem;border-bottom:1px solid var(--border)}
+  .ip-bar input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Space Mono',monospace;font-size:.85rem;padding:10px 14px;outline:none;transition:border-color .2s}
+  .ip-bar input:focus{border-color:var(--accent)}
+  .ip-bar input::placeholder{color:var(--muted)}
+  .btn-connect{background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;padding:10px 22px;cursor:pointer;transition:opacity .2s,transform .1s}
+  .btn-connect:hover{opacity:.85}
+  .btn-connect:active{transform:scale(.97)}
+
+  main{width:100%;max-width:1100px;padding:1.5rem 2rem 3rem;display:grid;grid-template-columns:1fr 300px;gap:1.5rem}
+
+  /* Stream */
+  .stream-panel{display:flex;flex-direction:column;gap:1rem}
+  .stream-box{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+  #streamImg{width:100%;height:100%;object-fit:cover;display:none}
+  .stream-placeholder{display:flex;flex-direction:column;align-items:center;gap:12px;color:var(--muted);font-size:.85rem;text-align:center;padding:2rem}
+  .stream-placeholder svg{opacity:.3}
+  .live-badge{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 10px;font-family:'Space Mono',monospace;font-size:.62rem;color:var(--accent);letter-spacing:.05em;display:none}
+  .capture-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:white;font-family:'Space Mono',monospace;font-size:.8rem;letter-spacing:.08em}
+  .capture-overlay.active{display:flex}
+  .spinner{width:32px;height:32px;border:2px solid rgba(255,255,255,.2);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite}
+  .shutter-ring{position:absolute;inset:0;border:3px solid transparent;border-radius:14px;pointer-events:none}
+  @keyframes shutter{0%{border-color:white;opacity:1}100%{border-color:transparent;opacity:0}}
+  .shutter-ring.go{animation:shutter .4s ease-out forwards}
+
+  /* GPS Bar */
+  .gps-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .gps-item{display:flex;flex-direction:column;gap:4px}
+  .gps-label{font-family:'Space Mono',monospace;font-size:.58rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .gps-val{font-family:'Space Mono',monospace;font-size:.88rem;font-weight:700;color:var(--gps)}
+  .gps-link{font-size:.72rem;color:var(--accent);text-decoration:none;margin-top:2px}
+  .gps-link:hover{text-decoration:underline}
+
+  /* Controls panel */
+  .controls{display:flex;flex-direction:column;gap:1rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.2rem}
+  .card-label{font-family:'Space Mono',monospace;font-size:.63rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:.9rem}
+
+  .btn-capture{width:100%;background:var(--accent);color:#000;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-weight:800;font-size:1rem;letter-spacing:.05em;padding:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:opacity .15s,transform .1s;margin-bottom:10px}
+  .btn-capture:hover{opacity:.85;box-shadow:0 0 24px rgba(0,229,255,.3)}
+  .btn-capture:active{transform:scale(.97)}
+  .btn-capture:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+
+  .btn-email{width:100%;background:transparent;border:1px solid var(--gps);color:var(--gps);border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:.88rem;padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,opacity .2s;margin-bottom:8px}
+  .btn-email:hover{background:rgba(167,139,250,.08)}
+  .btn-email:disabled{opacity:.4;cursor:not-allowed}
+  .btn-telegram{width:100%;background:transparent;border:1px solid var(--tg);color:var(--tg);border-radius:10px;font-family:'Syne',sans-serif;font-weight:700;font-size:.88rem;padding:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,opacity .2s}
+  .btn-telegram:hover{background:rgba(42,171,238,.08)}
+  .btn-telegram:disabled{opacity:.4;cursor:not-allowed}
+
+  .btn-flash{width:100%;background:transparent;border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Syne',sans-serif;font-weight:700;font-size:.9rem;padding:13px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:border-color .2s,background .2s}
+  .btn-flash:hover{border-color:var(--flash-on);background:rgba(255,215,64,.04)}
+  .btn-flash.on{border-color:var(--flash-on);background:rgba(255,215,64,.07);color:var(--flash-on)}
+  .flash-dot{width:12px;height:12px;border-radius:50%;background:var(--muted);transition:background .2s,box-shadow .2s}
+  .btn-flash.on .flash-dot{background:var(--flash-on);box-shadow:0 0 10px var(--flash-on)}
+
+  /* Camera settings */
+  .ctrl-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
+  .ctrl-row:last-child{border-bottom:none}
+  .ctrl-name{font-size:.75rem;color:var(--muted);width:90px;flex-shrink:0}
+  input[type=range]{flex:1;height:3px;appearance:none;background:var(--surface2);border-radius:4px;outline:none;cursor:pointer;accent-color:var(--accent)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);cursor:pointer}
+  .range-val{font-family:'Space Mono',monospace;font-size:.72rem;color:var(--accent);width:28px;text-align:right;flex-shrink:0}
+  select{flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:.75rem;cursor:pointer;outline:none}
+  select:focus{border-color:var(--accent)}
+  .toggle{position:relative;width:40px;height:22px;flex-shrink:0;margin-left:auto}
+  .toggle input{opacity:0;width:0;height:0}
+  .tog-sl{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--border);border-radius:22px;cursor:pointer;transition:background .3s}
+  .tog-sl::before{content:'';position:absolute;height:16px;width:16px;left:2px;bottom:2px;background:var(--muted);border-radius:50%;transition:transform .3s,background .3s}
+  .toggle input:checked+.tog-sl{background:#1f6feb;border-color:#388bfd}
+  .toggle input:checked+.tog-sl::before{transform:translateX(18px);background:var(--accent)}
+
+  /* Debug */
+  .debug-box{background:#050709;border:1px solid var(--border);border-radius:10px;padding:.8rem;font-family:'Space Mono',monospace;font-size:.64rem;max-height:160px;overflow-y:auto}
+  .debug-box::-webkit-scrollbar{width:3px}
+  .debug-box::-webkit-scrollbar-thumb{background:var(--border)}
+  .log-line{line-height:1.85}
+  .log-line.ok{color:var(--success)}.log-line.err{color:var(--danger)}.log-line.info{color:#4a90c4}.log-line.warn{color:var(--flash-on)}
+
+  /* Toast */
+  .toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border);border-radius:100px;padding:10px 24px;font-family:'Space Mono',monospace;font-size:.78rem;color:var(--text);transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s;opacity:0;pointer-events:none;z-index:999}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast.ok{border-color:var(--success);color:var(--success)}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
+
+  @media(max-width:720px){main{grid-template-columns:1fr}.gps-bar{grid-template-columns:1fr 1fr}header,.ip-bar,.ip-hint,main{padding-left:1rem;padding-right:1rem}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-dot"></div>Warehouse Bot CAM</div>
+  <div class="status-pill" id="statusPill"><div class="dot"></div><span id="statusText">Not connected</span></div>
+</header>
+
+<div class="ip-hint">
+  &#9432; Connect to WiFi &nbsp;<span>Rak</span>&nbsp; then enter the ESP32 IP shown in Serial Monitor &nbsp;|&nbsp; Email alerts → <span>rakeshsoni48128@gmail.com</span>
+</div>
+
+<div class="ip-bar">
+  <input type="text" id="ipInput" placeholder="ESP32 IP — e.g. 192.168.1.42" />
+  <button class="btn-connect" onclick="connect()">Connect</button>
+</div>
+
+<main>
+  <!-- Left: Stream + GPS -->
+  <div class="stream-panel">
+    <div class="stream-box">
+      <div class="stream-placeholder" id="placeholder">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <span>Enter IP and press Connect</span>
+      </div>
+      <img id="streamImg" alt="Live stream" />
+      <div class="live-badge" id="liveBadge">&#9679; LIVE</div>
+      <div class="capture-overlay" id="captureOverlay"><div class="spinner"></div><span>CAPTURING…</span></div>
+      <div class="shutter-ring" id="shutterRing"></div>
+    </div>
+
+    <!-- GPS Bar -->
+    <div class="gps-bar">
+      <div class="gps-item">
+        <span class="gps-label">Latitude</span>
+        <span class="gps-val" id="gLat">—</span>
+      </div>
+      <div class="gps-item">
+        <span class="gps-label">Longitude</span>
+        <span class="gps-val" id="gLng">—</span>
+      </div>
+      <div class="gps-item">
+        <span class="gps-label">Altitude</span>
+        <span class="gps-val" id="gAlt">—</span>
+      </div>
+      <div class="gps-item">
+        <span class="gps-label">Satellites</span>
+        <span class="gps-val" id="gSats">—</span>
+        <a class="gps-link" id="gpsLink" href="#" target="_blank" style="display:none">&#128205; Open Map</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Controls -->
+  <div class="controls">
+
+    <!-- Capture + Email -->
+    <div class="card">
+      <div class="card-label">Camera</div>
+      <button class="btn-capture" id="btnCapture" onclick="capturePhoto()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3.5"/><path d="M20 5h-2.586l-1.707-1.707A1 1 0 0015 3H9a1 1 0 00-.707.293L6.586 5H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V7a2 2 0 00-2-2z"/></svg>
+        CAPTURE
+      </button>
+      <button class="btn-email" id="btnEmail" onclick="sendEmail()">
+        &#9993; Send Photo + GPS to Email
+      </button>
+      <button class="btn-telegram" id="btnTelegram" onclick="sendTelegram()">
+        &#9992; Send Photo + GPS to Telegram
+      </button>
+    </div>
+
+    <!-- Flash -->
+    <div class="card">
+      <div class="card-label">Flash LED</div>
+      <button class="btn-flash" id="btnFlash" onclick="toggleFlash()">
+        <span id="flashLabel">&#9889; Flash &nbsp; OFF</span>
+        <div class="flash-dot"></div>
+      </button>
+    </div>
+
+    <!-- Camera Settings -->
+    <div class="card">
+      <div class="card-label">Camera Settings</div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">Resolution</span>
+        <select id="framesize" onchange="ctrl('framesize',this.value)">
+          <option value="5">QVGA 320×240</option>
+          <option value="6">CIF 400×296</option>
+          <option value="7">HVGA 480×320</option>
+          <option value="8" selected>VGA 640×480</option>
+          <option value="9">SVGA 800×600</option>
+          <option value="10">XGA 1024×768</option>
+          <option value="13">UXGA 1600×1200</option>
+        </select>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">Quality</span>
+        <input type="range" id="quality" min="4" max="63" value="10" oninput="rv(this);ctrl('quality',this.value)">
+        <span class="range-val" id="quality_v">10</span>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">Brightness</span>
+        <input type="range" id="brightness" min="-2" max="2" step="1" value="0" oninput="rv(this);ctrl('brightness',this.value)">
+        <span class="range-val" id="brightness_v">0</span>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">De-Noise</span>
+        <input type="range" id="denoise" min="0" max="8" step="1" value="0" oninput="rv(this);ctrl('denoise',this.value)">
+        <span class="range-val" id="denoise_v">0</span>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">Night Mode</span>
+        <label class="toggle"><input type="checkbox" id="night_mode" onchange="ctrl('night_mode',this.checked?1:0)"><span class="tog-sl"></span></label>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">H Mirror</span>
+        <label class="toggle"><input type="checkbox" id="hmirror" onchange="ctrl('hmirror',this.checked?1:0)"><span class="tog-sl"></span></label>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">V Flip</span>
+        <label class="toggle"><input type="checkbox" id="vflip" onchange="ctrl('vflip',this.checked?1:0)"><span class="tog-sl"></span></label>
+      </div>
+
+      <div class="ctrl-row">
+        <span class="ctrl-name">LED Intensity</span>
+        <input type="range" id="led" min="0" max="255" value="0" oninput="rv(this);ctrl('led',this.value)">
+        <span class="range-val" id="led_v">0</span>
+      </div>
+    </div>
+
+    <!-- Debug -->
+    <div class="card" style="flex:1">
+      <div class="card-label">Debug Log</div>
+      <div class="debug-box" id="debugBox">
+        <div class="log-line info">[ ready ] Enter ESP32 IP and connect</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var espIP = '', connected = false, flashOn = false;
+
+// ── Connect ────────────────────────────────────────────────────────────────
+function connect() {
+  var raw = document.getElementById('ipInput').value.trim();
+  if (!raw) { showToast('Enter an IP address','err'); return; }
+  if (!raw.startsWith('http')) raw = 'http://' + raw;
+  espIP = raw.replace(/\/$/, '');
+  log('Connecting → ' + espIP, 'info');
+
+  xhrGet(espIP + '/status', 6000, function(ok, txt) {
+    if (ok) {
+      try { var d = JSON.parse(txt); flashOn = d.flash === true; updateFlashUI(); } catch(e){}
+      connected = true;
+      setConnected(true);
+      startStream();
+      pollGPS();
+      showToast('Connected!', 'ok');
+      log('Status OK', 'ok');
+    } else {
+      log('Cannot reach ESP32 — same WiFi? Correct IP?', 'err');
+      showToast('Connection failed', 'err');
+    }
+  });
+}
+
+// ── Stream ─────────────────────────────────────────────────────────────────
+function startStream() {
+  var img = document.getElementById('streamImg');
+  img.src = espIP.replace(/(:\d+)?$/, ':81') + '/stream?t=' + Date.now();
+  img.style.display = 'block';
+  img.onerror = function() { log('Stream error — retrying', 'warn'); };
+  document.getElementById('placeholder').style.display = 'none';
+  var b = document.getElementById('liveBadge');
+  b.style.display = 'block'; b.textContent = '\u25CF LIVE';
+  log('Stream started', 'info');
+}
+
+// ── Capture ────────────────────────────────────────────────────────────────
+function capturePhoto() {
+  if (!connected) { showToast('Not connected','err'); return; }
+  var btn = document.getElementById('btnCapture');
+  btn.disabled = true;
+  document.getElementById('captureOverlay').classList.add('active');
+  log('Sending /capture…', 'info');
+
+  xhrGet(espIP + '/capture', 12000, function(ok) {
+    btn.disabled = false;
+    document.getElementById('captureOverlay').classList.remove('active');
+    if (ok) { flashShutter(); showToast('Photo captured ✓','ok'); log('Captured OK','ok'); }
+    else     { showToast('Capture failed','err'); log('/capture failed','err'); }
+  });
+}
+
+// ── Email ──────────────────────────────────────────────────────────────────
+function sendEmail() {
+  if (!connected) { showToast('Not connected','err'); return; }
+  var btn = document.getElementById('btnEmail');
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending…';
+  log('Sending email with photo + GPS…', 'info');
+
+  xhrGet(espIP + '/send-email', 30000, function(ok, txt) {
+    btn.disabled = false;
+    btn.innerHTML = '&#9993; Send Photo + GPS to Email';
+    if (ok) { showToast('Email sent! ✓','ok'); log('Email sent to rakeshsoni48128@gmail.com','ok'); }
+    else     { showToast('Email failed','err'); log('Email failed — check WiFi / credentials','err'); }
+  });
+}
+
+// ── Telegram ───────────────────────────────────────────────────────────────
+function sendTelegram() {
+  if (!connected) { showToast('Not connected','err'); return; }
+  var btn = document.getElementById('btnTelegram');
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending…';
+  log('Sending Telegram alert with photo + GPS…', 'info');
+
+  xhrGet(espIP + '/send-telegram', 30000, function(ok) {
+    btn.disabled = false;
+    btn.innerHTML = '&#9992; Send Photo + GPS to Telegram';
+    if (ok) { showToast('Telegram sent! ✓','ok'); log('Telegram alert sent OK','ok'); }
+    else     { showToast('Telegram failed','err'); log('Telegram failed — check Bot Token / Chat ID in camra.ino','err'); }
+  });
+}
+
+// ── Flash ──────────────────────────────────────────────────────────────────
+function toggleFlash() {
+  if (!connected) { showToast('Not connected','err'); return; }
+  xhrGet(espIP + '/flash', 5000, function(ok, txt) {
+    if (ok) {
+      try { flashOn = JSON.parse(txt).flash; } catch(e) { flashOn = !flashOn; }
+      updateFlashUI();
+      log('Flash: ' + (flashOn ? 'ON' : 'OFF'), 'ok');
+      showToast('Flash ' + (flashOn ? 'ON' : 'OFF'), 'ok');
+    }
+  });
+}
+
+function updateFlashUI() {
+  var btn = document.getElementById('btnFlash');
+  var lbl = document.getElementById('flashLabel');
+  if (flashOn) { btn.classList.add('on'); lbl.innerHTML='&#9889; Flash &nbsp; ON'; }
+  else          { btn.classList.remove('on'); lbl.innerHTML='&#9889; Flash &nbsp; OFF'; }
+}
+
+// ── Camera Control ─────────────────────────────────────────────────────────
+function ctrl(v, val) {
+  if (!connected) return;
+  xhrGet(espIP + '/control?var=' + v + '&val=' + val, 4000, function(ok) {
+    log((ok ? 'OK' : 'ERR') + ' ' + v + '=' + val, ok ? 'ok' : 'err');
+  });
+}
+
+function rv(el) {
+  var v = document.getElementById(el.id + '_v');
+  if (v) v.textContent = el.value;
+}
+
+// ── GPS Poll ───────────────────────────────────────────────────────────────
+function pollGPS() {
+  if (!connected) return;
+  xhrGet(espIP + '/gps', 5000, function(ok, txt) {
+    if (ok) {
+      try {
+        var d = JSON.parse(txt);
+        if (d.valid) {
+          document.getElementById('gLat').textContent  = d.lat.toFixed(6);
+          document.getElementById('gLng').textContent  = d.lng.toFixed(6);
+          document.getElementById('gAlt').textContent  = d.alt.toFixed(1) + ' m';
+          document.getElementById('gSats').textContent = d.sats;
+          var link = document.getElementById('gpsLink');
+          link.href = 'https://maps.google.com/?q=' + d.lat + ',' + d.lng;
+          link.style.display = 'inline';
+        } else {
+          document.getElementById('gLat').textContent  = 'No fix';
+          document.getElementById('gSats').textContent = d.sats || '0';
+        }
+      } catch(e) {}
+    }
+    setTimeout(pollGPS, 5000);
+  });
+}
+
+// ── XHR ───────────────────────────────────────────────────────────────────
+function xhrGet(url, timeout, cb) {
+  log('→ ' + url.replace(espIP,''), 'info');
+  var x = new XMLHttpRequest();
+  x.open('GET', url, true);
+  x.timeout = timeout;
+  x.onload     = function() { cb(x.status >= 200 && x.status < 300, x.responseText); };
+  x.onerror    = function() { log('Network error','err'); cb(false, null); };
+  x.ontimeout  = function() { log('Timeout: ' + url.replace(espIP,''),'err'); cb(false, null); };
+  try { x.send(); } catch(e) { cb(false, null); }
+}
+
+// ── UI Helpers ─────────────────────────────────────────────────────────────
+function setConnected(ok) {
+  var pill = document.getElementById('statusPill');
+  var text = document.getElementById('statusText');
+  if (ok) { pill.classList.add('connected'); text.textContent = 'Connected · ' + espIP.replace('http://',''); }
+  else     { pill.classList.remove('connected'); text.textContent = 'Not connected'; }
+}
+
+function flashShutter() {
+  var r = document.getElementById('shutterRing');
+  r.classList.remove('go'); void r.offsetWidth; r.classList.add('go');
+  setTimeout(function(){ r.classList.remove('go'); }, 450);
+}
+
+function log(msg, type) {
+  var box = document.getElementById('debugBox');
+  var d = document.createElement('div');
+  d.className = 'log-line ' + (type||'info');
+  d.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  box.prepend(d);
+  while (box.children.length > 80) box.removeChild(box.lastChild);
+}
+
+var tt;
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + (type||'');
+  clearTimeout(tt);
+  tt = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+
+document.getElementById('ipInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') connect();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.pio/
+.vscode/.browse.c_cpp.db*
+.vscode/ipch/
+*.elf
+*.bin
